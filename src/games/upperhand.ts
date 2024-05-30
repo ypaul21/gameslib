@@ -461,23 +461,35 @@ export class UpperHandGame extends GameBase {
 
     private getPiece(player: number, layer: number, trans = false): [Glyph, ...Glyph[]]  {
         // Choose max blackness and whiteness.
-        // Returns a combined glypth based on the player colour for a given layer 1 to boardSize.
+        // Returns a combined glyphs based on the player colour for a given layer 1 to boardSize.
         const layers = this.boardSize;
         if (trans) {
             const minOpacity = 0.2;
             const maxOpacity = 0.6;
             const opacity = (maxOpacity - minOpacity) * (layer - 2) / (layers - 2) + minOpacity;
-            return [{ name: "circle", colour: "#FFF", scale: 1.15, opacity: opacity * 0.75 }, { name: "circle", player, scale: 1.15, opacity }];
+            return [
+                { name: "circle", colour: "#FFF", scale: 1.15, opacity: opacity * 0.75 },
+                { name: "circle", player, scale: 1.15, opacity },
+            ];
         } else {
             const blackness = 0.1;
             const whiteness = 0.5;
             const scaled = (whiteness + blackness) * (layer - 1) / (layers - 1) - blackness;
             if (scaled === 0) {
-                return [{ name: "piece", player, scale: 1.15 }];
+                return [
+                    { name: "piece-borderless", player, scale: 1.2 },
+                    { name: "orb-borderless", player, scale: 1.2, opacity: 0.5 },
+                    { name: "piece", scale: 1.2, opacity: 0 },
+                ];
             } else {
                 const colour = scaled < 0 ? "#000" : "#FFF";
                 const opacity = scaled < 0 ? 1 + scaled : 1 - scaled;
-                return [{ name: "piece", colour, scale: 1.15 }, { name: "piece", player, scale: 1.15, opacity }]
+                return [
+                    { name: "piece-borderless", colour, scale: 1.2 },
+                    { name: "piece-borderless", player, scale: 1.2, opacity },
+                    { name: "orb", player, scale: 1.2, opacity: 0.5 },
+                    { name: "piece", scale: 1.2, opacity: 0 },
+                ];
             }
         }
     }

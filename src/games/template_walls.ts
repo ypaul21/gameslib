@@ -2,14 +2,16 @@ import { GameBase, IAPGameState, IClickResult, IIndividualState, IValidationResu
 import { APGamesInformation } from "../schemas/gameinfo";
 import { APRenderRep } from "@abstractplay/renderer/src/schemas/schema";
 import { APMoveResult } from "../schemas/moveresults";
-import { HexTriGraph, reviver, UserFacingError } from "../common";
+import { reviver, UserFacingError } from "../common";
 import i18next from "i18next";
 
 type playerid = 1 | 2;
+const columnLabels = "abcdefghijklmnopqrstuvwxyz".split("");
 
 interface IMoveState extends IIndividualState {
     currplayer: playerid;
-    board: Map<string, playerid>;
+    boardEdge: Map<string, playerid>;
+    boardCell: Map<string, playerid>;
     lastmove?: string;
 }
 
@@ -23,35 +25,65 @@ export class TemplGame extends GameBase {
         name: "Templ",
         uid: "templ",
         playercounts: [2],
-        version: "20240125",
-        dateAdded: "2024-02-13",
+        version: "20240227",
+        dateAdded: "2024-03-10",
         // i18next.t("apgames:descriptions.templ")
         description: "apgames:descriptions.templ",
         urls: [],
         people: [],
-        variants: [],
-        categories: ["goal>connect", "mechanic>place", "board>shape>hex", "board>connect>hex", "components>simple"],
+        variants: [
+            { uid: "size-7x7", group: "board" },
+        ],
+        categories: ["goal>connect", "mechanic>place", "board>shape>rect", "board>connect>rect", "components>simple"],
         flags: ["experimental"],
     };
 
     public coords2algebraic(x: number, y: number): string {
-        return this.graph.coords2algebraic(x, y);
+        return GameBase.coords2algebraic(x, y, this.height);
     }
 
     public algebraic2coords(cell: string): [number, number] {
-        return this.graph.algebraic2coords(cell);
+        return GameBase.algebraic2coords(cell, this.height);
+    }
+
+    private splitWall(wall: string): [number, number, string] {
+        // Split the wall into its components.
+        // To distinguish between the output from this method and the render output
+        // we call the third element "orient" for orientation instead of "side".
+        const cell = wall.slice(0, wall.length - 1);
+        const orient = wall[wall.length - 1];
+        const [x, y] = this.algebraic2coords(cell);
+        return [x, y, orient];
+    }
+
+    private render2wall(row: number, col: number, side: string): string {
+        // Converts click results from renderer into wall notation.
+        // For games with interior-only walls, we use the north and east edges.
+        // For games with exterior walls (like Dots and Boxes), we use the south and west edges.
+        const orientation = side === "S" || side === "N" ? "h" : "v";
+        const rowLabel = side === "S" ? this.height - row - 1 : this.height - row;
+        const colNumber = side === "W" ? col - 1 : col;
+        const colLabel = colNumber < 0 ? "z" : columnLabels[colNumber];
+        return colLabel + rowLabel.toString() + orientation;
+    }
+
+    private endsWithHV(cell: string): boolean {
+        // Check if the cell ends with an "h" or "v".
+        const lastChar = cell[cell.length - 1];
+        return lastChar === "h" || lastChar === "v";
     }
 
     public numplayers = 2;
     public currplayer!: playerid;
-    public board!: Map<string, playerid>;
-    public graph: HexTriGraph = new HexTriGraph(7, 13);
+    public boardEdge!: Map<string, playerid>;
+    public boardCell!: Map<string, playerid>;
     public gameover = false;
     public winner: playerid[] = [];
     public stack!: Array<IMoveState>;
     public results: Array<APMoveResult> = [];
     public variants: string[] = [];
-    private boardSize = 0;
+    private width = 0;
+    private height = 0;
     private dots: string[] = [];
 
     constructor(state?: ITemplState | string, variants?: string[]) {
@@ -65,7 +97,8 @@ export class TemplGame extends GameBase {
                 _results: [],
                 _timestamp: new Date(),
                 currplayer: 1,
-                board: new Map(),
+                boardEdge: new Map(),
+                boardCell: new Map(),
             };
             this.stack = [fresh];
         } else {
@@ -80,6 +113,7 @@ export class TemplGame extends GameBase {
             this.variants = state.variants;
             this.stack = [...state.stack];
         }
+        [this.width, this.height] = this.getBoardDimensions();
         this.load();
     }
 
@@ -97,35 +131,26 @@ export class TemplGame extends GameBase {
         }
         this.results = [...state._results];
         this.currplayer = state.currplayer;
-        this.board = new Map(state.board);
+        this.boardEdge = new Map(state.boardEdge);
+        this.boardCell = new Map(state.boardCell);
         this.lastmove = state.lastmove;
-        this.boardSize = this.getBoardSize();
-        this.buildGraph();
         return this;
     }
 
-    private getBoardSize(): number {
+    private getBoardDimensions(): [number, number] {
         // Get board size from variants.
         if (this.variants !== undefined && this.variants.length > 0 && this.variants[0] !== undefined && this.variants[0].length > 0) {
             const sizeVariants = this.variants.filter(v => v.includes("size"))
             if (sizeVariants.length > 0) {
-                const size = sizeVariants[0].match(/\d+/);
-                return parseInt(size![0], 10);
-            }
-            if (isNaN(this.boardSize)) {
-                throw new Error(`Could not determine the board size from variant "${this.variants[0]}"`);
+                // Extract the size from the variant.
+                // Variant is expected to be in the format "size-6-7".
+                const size = sizeVariants[0].match(/size-(\d+)x(\d+)/);
+                if (size !== null && size.length === 3) {
+                    return [parseInt(size[1], 10), parseInt(size[2], 10)];
+                }
             }
         }
-        return 4;
-    }
-
-    private getGraph(): HexTriGraph {
-        return new HexTriGraph(this.boardSize, (this.boardSize * 2) - 1);
-    }
-
-    private buildGraph(): TemplGame {
-        this.graph = this.getGraph();
-        return this;
+        return [5, 5]
     }
 
     public moves(player?: playerid): string[] {
@@ -134,6 +159,27 @@ export class TemplGame extends GameBase {
         }
         if (this.gameover) { return []; }
         const moves: string[] = [];
+        for (let i = 0; i < this.width; i++) {
+            for (let j = 0; j < this.height; j++) {
+                const cell = this.coords2algebraic(i, j);
+                if (this.boardCell.has(cell)) { continue; }
+                moves.push(cell);
+            }
+        }
+        for (let i = 0; i < this.width - 1; i++) {
+            for (let j = 0; j < this.height; j++) {
+                const wallV = this.coords2algebraic(i, j) + "v";
+                if (this.boardEdge.has(wallV)) { continue; }
+                moves.push(wallV);
+            }
+        }
+        for (let i = 0; i < this.width; i++) {
+            for (let j = 1; j < this.height; j++) {
+                const wallH = this.coords2algebraic(i, j) + "h";
+                if (this.boardEdge.has(wallH)) { continue; }
+                moves.push(wallH);
+            }
+        }
         return moves;
     }
 
@@ -144,12 +190,23 @@ export class TemplGame extends GameBase {
 
     public handleClick(move: string, row: number, col: number, piece?: string): IClickResult {
         try {
-            const cell = this.coords2algebraic(col, row);
             let newmove = "";
-            newmove = cell;
+            const cell = this.coords2algebraic(col, row);
+            if (piece === undefined || piece === "") {
+                newmove = cell;
+            } else {
+                const newWall = this.render2wall(row, col, piece);
+                newmove = newWall;
+            }
             const result = this.validateMove(newmove) as IClickResult;
             if (!result.valid) {
-                result.move = "";
+                if (newmove.includes("/")) {
+                    result.move = newmove.split("/")[0];
+                } else if (newmove.includes("-")) {
+                    result.move = move;
+                } else {
+                    result.move = "";
+                }
             } else {
                 result.move = newmove;
             }
@@ -158,8 +215,8 @@ export class TemplGame extends GameBase {
             return {
                 move,
                 valid: false,
-                message: i18next.t("apgames:validation._general.GENERIC", { move, row, col, piece, emessage: (e as Error).message })
-            }
+                message: i18next.t("apgames:validation._general.GENERIC", {move, row, col, piece, emessage: (e as Error).message})
+            };
         }
     }
 
@@ -198,8 +255,15 @@ export class TemplGame extends GameBase {
         if (m.length === 0) { return this; }
         this.dots = [];
         this.results = [];
-        this.results.push({ type: "place", where: m });
-        this.board.set(m, this.currplayer);
+        if (this.endsWithHV(m)) {
+            this.boardEdge.set(m, this.currplayer);
+            const [, , orient] = this.splitWall(m);
+            this.results.push({ type: "place", where: m, what: orient });
+        } else {
+            this.boardCell.set(m, this.currplayer);
+            this.results.push({ type: "place", where: m });
+        }
+        if (partial) { return this; }
 
         this.lastmove = m;
         this.currplayer = this.currplayer % 2 + 1 as playerid;
@@ -240,63 +304,77 @@ export class TemplGame extends GameBase {
             _timestamp: new Date(),
             currplayer: this.currplayer,
             lastmove: this.lastmove,
-            board: new Map(this.board),
+            boardEdge: new Map(this.boardEdge),
+            boardCell: new Map(this.boardCell),
         };
     }
 
     public render(): APRenderRep {
         // Build piece string
-        const pstr: string[][] = [];
-        const cells = this.graph.listCells(true);
-        for (const row of cells) {
-            const pieces: string[] = [];
-            for (const cell of row) {
-                if (this.board.has(cell)) {
-                    const owner = this.board.get(cell)!;
-                    if (owner === 1) {
-                        pieces.push("A")
+        let pstr = "";
+        for (let row = 0; row < this.height; row++) {
+            if (pstr.length > 0) {
+                pstr += "\n";
+            }
+            for (let col = 0; col < this.width; col++) {
+                const cell = this.coords2algebraic(col, row);
+                if (this.boardCell.has(cell)) {
+                    const player = this.boardCell.get(cell);
+                    if (player === 1) {
+                        pstr += "A";
                     } else {
-                        pieces.push("B");
+                        pstr += "B";
                     }
                 } else {
-                    pieces.push("-");
+                    pstr += "-";
                 }
             }
-            pstr.push(pieces);
+        }
+        pstr = pstr.replace(new RegExp(`-{${this.width}}`, "g"), "_");
+
+        const markers: any[] = []
+        for (const [wall, player] of this.boardEdge.entries()) {
+            const [x, y, orient] = this.splitWall(wall);
+            if (orient === "h") {
+                markers.push({ type: "line", points: [{row: y, col: x}, {row: y, col: x + 1}], colour: player, width: 6, shorten: 0.075 });
+            } else {
+                markers.push({ type: "line", points: [{row: y + 1, col: x + 1}, {row: y, col: x + 1}], colour: player, width: 6, shorten: 0.075 });
+            }
         }
 
         // Build rep
         const rep: APRenderRep =  {
             board: {
-                style: "hex-of-hex",
-                minWidth: this.boardSize,
-                maxWidth: (this.boardSize * 2) - 1,
+                style: "squares-beveled",
+                width: this.width,
+                height: this.height,
+                strokeWeight: 1,
+                markers,
             },
+            options: ["clickable-edges"],
             legend: {
-                A: {
-                    name: "piece",
-                    colour: 1
-                },
-                B: {
-                    name: "piece",
-                    colour: 2
-                },
+                A: [{ name: "piece", colour: 1 }],
+                B: [{ name: "piece", colour: 2 }],
             },
-            pieces: pstr.map(p => p.join("")).join("\n"),
+            pieces: pstr,
         };
 
         // Add annotations
+        rep.annotations = [];
         if (this.stack[this.stack.length - 1]._results.length > 0) {
-            // @ts-ignore
-            rep.annotations = [];
             for (const move of this.stack[this.stack.length - 1]._results) {
                 if (move.type === "place") {
-                    const [x, y] = this.graph.algebraic2coords(move.where!);
-                    rep.annotations.push({type: "enter", targets: [{row: y, col: x}]});
-                } else if (move.type === "move") {
-                    const [fromX, fromY] = this.algebraic2coords(move.from);
-                    const [toX, toY] = this.algebraic2coords(move.to);
-                    rep.annotations.push({ type: "move", targets: [{ row: fromY, col: fromX }, { row: toY, col: toX }] });
+                    if (move.what === undefined) {
+                        const [x, y] = this.algebraic2coords(move.where!);
+                        rep.annotations.push({ type: "enter", targets: [{ row: y, col: x }] });
+                    } else {
+                        const [x, y, orient] = this.splitWall(move.where!);
+                        if (orient === "h") {
+                            markers.push({ type: "line", points: [{row: y, col: x}, {row: y, col: x + 1}], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
+                        } else {
+                            markers.push({ type: "line", points: [{row: y + 1, col: x + 1}, {row: y, col: x + 1}], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
+                        }
+                    }
                 }
             }
         }
@@ -304,7 +382,7 @@ export class TemplGame extends GameBase {
             const points = [];
             for (const cell of this.dots) {
                 const [x, y] = this.algebraic2coords(cell);
-                points.push({ row: y, col: x });
+                points.push({row: y, col: x});
             }
             // @ts-ignore
             rep.annotations.push({ type: "dots", targets: points });

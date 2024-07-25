@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { GameBase, IAPGameState, IClickResult, IIndividualState, IRenderOpts, IValidationResult } from "./_base";
 import { APGamesInformation } from "../schemas/gameinfo";
-import { APRenderRep, Glyph } from "@abstractplay/renderer/src/schemas/schema";
+import { APRenderRep, Glyph, RowCol } from "@abstractplay/renderer/src/schemas/schema";
 import { APMoveResult } from "../schemas/moveresults";
 import { reviver, UserFacingError } from "../common";
 import i18next from "i18next";
@@ -176,7 +176,7 @@ export class TemplGame extends GameBase {
     private getBoardSize(): number {
         // Get board size from variants.
         if (this.variants !== undefined && this.variants.length > 0 && this.variants[0] !== undefined && this.variants[0].length > 0) {
-            const sizeVariants = this.variants.filter(v => v.includes("size"))
+            const sizeVariants = this.variants.filter(v => v.includes("size"));
             if (sizeVariants.length > 0) {
                 const size = sizeVariants[0].match(/\d+/);
                 return parseInt(size![0], 10);
@@ -251,7 +251,7 @@ export class TemplGame extends GameBase {
             } else {
                 result.move = newmove;
             }
-            result.opts = {hideLayer: this.hideLayer};
+            result.opts = { hideLayer: this.hideLayer };
             return result;
         } catch (e) {
             return {
@@ -278,22 +278,22 @@ export class TemplGame extends GameBase {
             const [x, y] = this.algebraic2coords(m);
             if (x < 0 || x >= 2 * this.boardSize - 1 || y < 0 || y >= 2 * this.boardSize - 1) {
                 result.valid = false;
-                result.message = i18next.t("apgames:validation._general.INVALIDCELL", {cell: m});
+                result.message = i18next.t("apgames:validation._general.INVALIDCELL", { cell: m });
                 return result;
             }
         } catch {
             result.valid = false;
-            result.message = i18next.t("apgames:validation._general.INVALIDCELL", {cell: m});
+            result.message = i18next.t("apgames:validation._general.INVALIDCELL", { cell: m });
             return result;
         }
         if (this.board.has(m)) {
             result.valid = false;
-            result.message = i18next.t("apgames:validation._general.OCCUPIED", {where: m});
+            result.message = i18next.t("apgames:validation._general.OCCUPIED", { where: m });
             return result;
         }
         if (!this.moves().includes(m)) {
             result.valid = false;
-            result.message = i18next.t("apgames:validation.templ.CANNOT_PLACE", {move: m});
+            result.message = i18next.t("apgames:validation.templ.CANNOT_PLACE", { move: m });
             return result;
         }
         result.valid = true;
@@ -302,7 +302,7 @@ export class TemplGame extends GameBase {
         return result;
     }
 
-    public move(m: string, {partial = false, trusted = false} = {}): TemplGame {
+    public move(m: string, { partial = false, trusted = false } = {}): TemplGame {
         if (this.gameover) {
             throw new UserFacingError("MOVES_GAMEOVER", i18next.t("apgames:MOVES_GAMEOVER"));
         }
@@ -490,17 +490,16 @@ export class TemplGame extends GameBase {
                 width: this.boardSize,
                 height: this.boardSize,
                 markers: [
-                    {type:"edge", edge: "N", colour: 1},
-                    {type:"edge", edge: "S", colour: 1},
-                    {type:"edge", edge: "E", colour: 2},
-                    {type:"edge", edge: "W", colour: 2},
+                    { type:"edge", edge: "N", colour: 1 },
+                    { type:"edge", edge: "S", colour: 1 },
+                    { type:"edge", edge: "E", colour: 2 },
+                    { type:"edge", edge: "W", colour: 2 },
                 ]
             },
             legend,
             pieces: pstr,
         };
 
-        // @ts-ignore
         rep.annotations = [];
         if (this.results.length > 0) {
             for (const move of this.results) {
@@ -513,11 +512,10 @@ export class TemplGame extends GameBase {
         if (this.dots.length > 0) {
             const points = [];
             for (const cell of this.dots) {
-                const [x, y] = this.algebraic2position(cell);
-                points.push({row: y, col: x});
+                const [x, y] = this.algebraic2coords(cell);
+                points.push({ row: y, col: x });
             }
-            // @ts-ignore
-            rep.annotations.push({type: "dots", targets: points});
+            rep.annotations.push({ type: "dots", targets: points as [RowCol, ...RowCol[]] });
         }
         rep.areas = [
             {

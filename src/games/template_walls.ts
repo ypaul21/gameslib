@@ -1,6 +1,6 @@
 import { GameBase, IAPGameState, IClickResult, IIndividualState, IValidationResult } from "./_base";
 import { APGamesInformation } from "../schemas/gameinfo";
-import { APRenderRep } from "@abstractplay/renderer/src/schemas/schema";
+import { APRenderRep, RowCol } from "@abstractplay/renderer/src/schemas/schema";
 import { APMoveResult } from "../schemas/moveresults";
 import { reviver, UserFacingError } from "../common";
 import i18next from "i18next";
@@ -140,7 +140,7 @@ export class TemplGame extends GameBase {
     private getBoardDimensions(): [number, number] {
         // Get board size from variants.
         if (this.variants !== undefined && this.variants.length > 0 && this.variants[0] !== undefined && this.variants[0].length > 0) {
-            const sizeVariants = this.variants.filter(v => v.includes("size"))
+            const sizeVariants = this.variants.filter(v => v.includes("size"));
             if (sizeVariants.length > 0) {
                 // Extract the size from the variant.
                 // Variant is expected to be in the format "size-6-7".
@@ -215,13 +215,13 @@ export class TemplGame extends GameBase {
             return {
                 move,
                 valid: false,
-                message: i18next.t("apgames:validation._general.GENERIC", {move, row, col, piece, emessage: (e as Error).message})
+                message: i18next.t("apgames:validation._general.GENERIC", { move, row, col, piece, emessage: (e as Error).message })
             };
         }
     }
 
     public validateMove(m: string): IValidationResult {
-        const result: IValidationResult = {valid: false, message: i18next.t("apgames:validation._general.DEFAULT_HANDLER")};
+        const result: IValidationResult = { valid: false, message: i18next.t("apgames:validation._general.DEFAULT_HANDLER") };
         if (m.length === 0) {
             result.valid = true;
             result.complete = -1;
@@ -235,7 +235,7 @@ export class TemplGame extends GameBase {
         return result;
     }
 
-    public move(m: string, {partial = false, trusted = false} = {}): TemplGame {
+    public move(m: string, { partial = false, trusted = false } = {}): TemplGame {
         if (this.gameover) {
             throw new UserFacingError("MOVES_GAMEOVER", i18next.t("apgames:MOVES_GAMEOVER"));
         }
@@ -336,9 +336,9 @@ export class TemplGame extends GameBase {
         for (const [wall, player] of this.boardEdge.entries()) {
             const [x, y, orient] = this.splitWall(wall);
             if (orient === "h") {
-                markers.push({ type: "line", points: [{row: y, col: x}, {row: y, col: x + 1}], colour: player, width: 6, shorten: 0.075 });
+                markers.push({ type: "line", points: [{ row: y, col: x }, { row: y, col: x + 1 }], colour: player, width: 6, shorten: 0.075 });
             } else {
-                markers.push({ type: "line", points: [{row: y + 1, col: x + 1}, {row: y, col: x + 1}], colour: player, width: 6, shorten: 0.075 });
+                markers.push({ type: "line", points: [{ row: y + 1, col: x + 1 }, { row: y, col: x + 1 }], colour: player, width: 6, shorten: 0.075 });
             }
         }
 
@@ -370,9 +370,9 @@ export class TemplGame extends GameBase {
                     } else {
                         const [x, y, orient] = this.splitWall(move.where!);
                         if (orient === "h") {
-                            markers.push({ type: "line", points: [{row: y, col: x}, {row: y, col: x + 1}], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
+                            markers.push({ type: "line", points: [{ row: y, col: x }, { row: y, col: x + 1 }], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
                         } else {
-                            markers.push({ type: "line", points: [{row: y + 1, col: x + 1}, {row: y, col: x + 1}], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
+                            markers.push({ type: "line", points: [{ row: y + 1, col: x + 1 }, { row: y, col: x + 1 }], colour: "#FFFF00", width: 6, shorten: 0.075, opacity: 0.5 });
                         }
                     }
                 }
@@ -382,10 +382,9 @@ export class TemplGame extends GameBase {
             const points = [];
             for (const cell of this.dots) {
                 const [x, y] = this.algebraic2coords(cell);
-                points.push({row: y, col: x});
+                points.push({ row: y, col: x });
             }
-            // @ts-ignore
-            rep.annotations.push({ type: "dots", targets: points });
+            rep.annotations.push({ type: "dots", targets: points as [RowCol, ...RowCol[]] });
         }
         return rep;
     }

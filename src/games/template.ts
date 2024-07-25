@@ -1,6 +1,6 @@
 import { GameBase, IAPGameState, IClickResult, IIndividualState, IValidationResult } from "./_base";
 import { APGamesInformation } from "../schemas/gameinfo";
-import { APRenderRep } from "@abstractplay/renderer/src/schemas/schema";
+import { APRenderRep, RowCol } from "@abstractplay/renderer/src/schemas/schema";
 import { APMoveResult } from "../schemas/moveresults";
 import { reviver, UserFacingError } from "../common";
 import i18next from "i18next";
@@ -105,7 +105,7 @@ export class TemplGame extends GameBase {
     private getBoardSize(): number {
         // Get board size from variants.
         if (this.variants !== undefined && this.variants.length > 0 && this.variants[0] !== undefined && this.variants[0].length > 0) {
-            const sizeVariants = this.variants.filter(v => v.includes("size"))
+            const sizeVariants = this.variants.filter(v => v.includes("size"));
             if (sizeVariants.length > 0) {
                 const size = sizeVariants[0].match(/\d+/);
                 return parseInt(size![0], 10);
@@ -153,7 +153,7 @@ export class TemplGame extends GameBase {
     }
 
     public validateMove(m: string): IValidationResult {
-        const result: IValidationResult = {valid: false, message: i18next.t("apgames:validation._general.DEFAULT_HANDLER")};
+        const result: IValidationResult = { valid: false, message: i18next.t("apgames:validation._general.DEFAULT_HANDLER") };
         if (m.length === 0) {
             result.valid = true;
             result.complete = -1;
@@ -167,7 +167,7 @@ export class TemplGame extends GameBase {
         return result;
     }
 
-    public move(m: string, {partial = false, trusted = false} = {}): TemplGame {
+    public move(m: string, { partial = false, trusted = false } = {}): TemplGame {
         if (this.gameover) {
             throw new UserFacingError("MOVES_GAMEOVER", i18next.t("apgames:MOVES_GAMEOVER"));
         }
@@ -270,7 +270,6 @@ export class TemplGame extends GameBase {
             pieces: pstr,
         };
 
-        // @ts-ignore
         rep.annotations = [];
         if (this.results.length > 0) {
             for (const move of this.results) {
@@ -290,8 +289,7 @@ export class TemplGame extends GameBase {
                 const [x, y] = this.algebraic2coords(cell);
                 points.push({ row: y, col: x });
             }
-            // @ts-ignore
-            rep.annotations.push({ type: "dots", targets: points });
+            rep.annotations.push({ type: "dots", targets: points as [RowCol, ...RowCol[]] });
         }
         return rep;
     }
